@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files（PD-08 第 4.3 节：.env.example 需提交，仅忽略本地实际值）
+# env files（.env.example 需提交，仅忽略本地实际值）
 .env
+.env.local
 .env*.local
 
 # vercel
@@ -46,5 +47,5 @@ next-env.d.ts
 __pycache__/
 *.pyc
 
-# Data（PD-08 第 4.2 节：数据文件不提交）
-data/
+# Data（数据文件不提交）
+data/*.json
