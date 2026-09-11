@@ -47,5 +47,5 @@ next-env.d.ts
 __pycache__/
 *.pyc
 
-# Data（数据文件不提交）
-data/*.json
+# Data（原始数据与生成数据均不提交）
+/data/
