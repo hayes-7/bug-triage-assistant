@@ -49,3 +49,5 @@ __pycache__/
 
 # Data（原始数据与生成数据均不提交）
 /data/
+/eval_set_*.csv
+/retrieval_corpus.csv
