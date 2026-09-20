@@ -223,8 +223,21 @@ export type EvalMetrics = {
     sampleCount: number;
     /** 正确标记为 insufficient 的比例 */
     correctlyFlaggedRate: number;
-    /** 在信息不足样本上的平均置信度，应显著偏低 */
-    avgConfidenceOnInsufficient: number;
+    /**
+     * 观测值：在样本被判为 insufficient 时，模型给出的 Top-1 主题候选
+     *（topicCandidates[0].confidence）置信度的均值。
+     *
+     * 注意两点：
+     * 1. 这是「主题置信度」，不是「信息充分度判定的置信度」——
+     *    InfoSufficiency 为纯枚举，schema 中不存在充分度判定的置信度字段。
+     * 2. 本指标不设目标值。实测表明「能猜对模块」与「能判断信息是否充足」
+     *    是两种分离的能力：模型在信息不足时仍可能正确猜中模块并给出高置信度
+     *   （baseline 批次该子集中 5/8 命中标准答案），故不能期待该值显著偏低。
+     *
+     * 「低置信度机制是否有效」由 correctlyFlaggedRate 与界面层对
+     * insufficient / fallbackUsed 的处理负责验证，不由本字段承担。
+     */
+    avgTop1TopicConfidenceOnInsufficient: number;
   };
 };
 
