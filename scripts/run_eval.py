@@ -1045,7 +1045,7 @@ def main():
     # ---- 汇总落盘 ----
     summary = {
         "runId": run_id,
-        "runLabel": "baseline",
+        "runLabel": run_id,
         "createdAt": started_at,
         "finishedAt": now_iso(),
         "promptVersion": metrics["promptVersion"],
