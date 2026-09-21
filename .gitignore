@@ -51,3 +51,6 @@ __pycache__/
 /data/
 /eval_set_*.csv
 /retrieval_corpus.csv
+
+# dev server 启动日志（每次启动重新生成，无归档价值）
+.dev-server.log

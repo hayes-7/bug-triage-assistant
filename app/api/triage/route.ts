@@ -6,7 +6,7 @@ import { truncateToTokenLimit } from "@/lib/truncate";
 import { errorResponse } from "@/lib/triage/errors";
 import { MissingModelApiKeyError, callTriageModel } from "@/lib/triage/model";
 import { normalizeModelOutput, type ModelOutput } from "@/lib/triage/schema";
-import { PROMPT_VERSION } from "@/prompts/triage_v1_0";
+import { PROMPT_VERSION } from "@/prompts";
 import {
   TIMEOUTS,
   type ErrorResponse,

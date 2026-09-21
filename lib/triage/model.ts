@@ -7,7 +7,7 @@ import {
   generateObject,
 } from "ai";
 
-import { MODEL_PARAMS, SYSTEM_PROMPT, buildUserPrompt } from "@/prompts/triage_v1_0";
+import { MODEL_PARAMS, SYSTEM_PROMPT, buildUserPrompt } from "@/prompts";
 import { TIMEOUTS } from "@/types/contract";
 
 import { modelOutputSchema, type ModelOutput } from "./schema";

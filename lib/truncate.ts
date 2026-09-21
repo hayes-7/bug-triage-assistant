@@ -1,4 +1,4 @@
-import { INPUT_TRUNCATE_TOKENS } from "@/prompts/triage_v1_0";
+import { INPUT_TRUNCATE_TOKENS } from "@/prompts";
 
 /**
  * 输入文本截断。

@@ -135,6 +135,27 @@
 - 产出：`data/dup_testset.csv`（37 对可用）+ `data/dup_testset_all.csv`
   （193 对，含 `target_in_retrieval` / `dup_in_retrieval` 标记列，供复核）。
 
+## 2026-09-21 · 为何引入 prompts/index.ts 作为版本导出入口（PD-07 第 3.1 节）
+
+- **背景**：PD-07 第 3.1 节规定 `prompts/index.ts` 为「当前启用版本的导出入口」，但项目此前未建，
+  业务代码直接 import 具体版本文件：`lib/triage/model.ts` 与 `lib/truncate.ts` 引 `triage_v1_0`，
+  `app/api/triage/route.ts` 也从同一文件引 `PROMPT_VERSION` 写入 `meta.promptVersion`。
+  三处独立指向同一个版本文件，升版须同步改三处。
+- **风险（本次不改会出的错）**：漏改任一处，该处会继续用旧提示词；而 `meta.promptVersion` 由另一处提供，
+  于是出现「批次标注版本」与「实际使用的提示词」不一致——接口返回 v1.1，模型实际按 v1.0 判定
+  （本次冒烟即据此拦截：若 `promptVersion` 仍为 v1.0 则不得跑全量）。
+  这类错误在评测完成后无法通过指标自查发现，整批数据作废，只能重跑。
+- **决策**：业务代码一律从 `@/prompts` 导入，升版只改 `index.ts` 一行 re-export。
+  附带收益：`meta.promptVersion` 与 `EVAL_BATCH_LABEL` 同源导出，无法单独错改其中一项，
+  从结构上消除「版本标注与实际提示词分叉」的可能。
+- **本次改动范围**：`model.ts` / `route.ts` / `truncate.ts` 三处 import 改址为 `@/prompts`（仅改地址，
+  导出符号与取值不变，`INPUT_TRUNCATE_TOKENS` 在两版均为 1500，行为无变化）。
+  `prompts/triage_v1_0.ts` 保留不动——历史版本须可复现 `baseline` 批次；
+  `index.ts` 当前指向 v1.1。
+- **未做**：未给 `index.ts` 加运行时校验（如断言 `PROMPT_VERSION` 与文件名一致）。
+  当前只有两个版本、切换频率低，暂以「冒烟核对 `meta.promptVersion`」代替；
+  版本数增加后再考虑。
+
 ## 2026-09-18 · triage_rules 规则库过滤
 
 - `data/triage_rules.csv` 由 78 条过滤至 54 条：删除项目管理流程类（milestone / assignee / projects /
