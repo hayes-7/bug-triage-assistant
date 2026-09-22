@@ -50,7 +50,7 @@ __pycache__/
 # Data（检索库与原始数据不提交；评测产物与评测集放行，保证结果可追溯）
 /data/*
 !/data/eval_metrics_*
-!/data/eval_results_*
+!/data/eval_results_*.csv
 !/data/eval_dup_results_*
 !/data/eval_set_*
 
