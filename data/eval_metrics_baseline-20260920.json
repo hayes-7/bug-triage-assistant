@@ -1,0 +1,129 @@
+{
+  "runId": "baseline-20260920",
+  "runLabel": "baseline",
+  "createdAt": "2026-09-20T10:57:39+00:00",
+  "finishedAt": "2026-09-20T11:01:54+00:00",
+  "promptVersion": "v1.0",
+  "modelId": "qwen-plus",
+  "config": {
+    "retrievalTopK": 5,
+    "dupThreshold": 0.75,
+    "temperature": 0,
+    "maxInputTokens": 1500
+  },
+  "datasetVersions": {
+    "main": "eval_set_main.csv[280行,sha:0b5a8da9f5b8]",
+    "adversarial": "eval_set_adversarial.csv[20行,sha:ffd5b0d60042]",
+    "dup": "dup_testset.csv[37行,sha:4209a6b4b358]"
+  },
+  "sampleCount": 280,
+  "metrics": {
+    "runId": "baseline-20260920",
+    "dataset": "main",
+    "sampleCount": 280,
+    "attemptedCount": 280,
+    "failedCount": 0,
+    "excludedFallbackCount": 0,
+    "promptVersion": "v1.0",
+    "modelId": "qwen-plus",
+    "topicTop1Accuracy": 0.7035714285714286,
+    "topicTop3HitRate": 0.9,
+    "topicMacroF1": 0.6855404764299323,
+    "perTopicF1": {
+      "editor": 0.6296,
+      "rendering": 0.7048,
+      "gui": 0.6316,
+      "gdscript": 0.8302,
+      "core": 0.5091,
+      "platforms": 0.3922,
+      "animation": 0.8889,
+      "buildsystem": 0.7895,
+      "import": 0.8511,
+      "input": 0.6286,
+      "other": 0.0
+    },
+    "severityAccuracy": 0.2857142857142857,
+    "perSeverityF1": {
+      "crash": 0.8989,
+      "high": 0.4094,
+      "normal": 0.0704,
+      "low": 0.0
+    },
+    "severityConfusionMatrix": {
+      "crash": {
+        "crash": 40,
+        "high": 3,
+        "normal": 0,
+        "low": 4
+      },
+      "high": {
+        "crash": 2,
+        "high": 35,
+        "normal": 3,
+        "low": 59
+      },
+      "normal": {
+        "crash": 0,
+        "high": 34,
+        "normal": 5,
+        "low": 95
+      },
+      "low": {
+        "crash": 0,
+        "high": 0,
+        "normal": 0,
+        "low": 0
+      }
+    },
+    "totalInputTokens": 188381,
+    "totalOutputTokens": 54224,
+    "totalTokens": 242605,
+    "parseSuccessRate": 0.9892857142857143,
+    "retryRate": 0.010714285714285714,
+    "fallbackRate": 0.0,
+    "avgLatencyMs": 4681.6,
+    "p95LatencyMs": 5095.0,
+    "topicTop1AccuracyWithFallbackAsMiss": 0.7035714285714286,
+    "topicTop3HitRateWithFallbackAsMiss": 0.9
+  },
+  "adversarial": {
+    "sampleCount": 20,
+    "correctlyFlaggedRate": 0.4,
+    "correctlyFlagged": 8,
+    "avgConfidenceOnInsufficient": 0.8888,
+    "infoSufficiencyDistribution": {
+      "partial": 8,
+      "insufficient": 8,
+      "sufficient": 4
+    },
+    "excludedFallbackCount": 0,
+    "totalInputTokens": 13148,
+    "totalOutputTokens": 3763
+  },
+  "duplicate": {
+    "duplicateRecallAt5": 0.4865,
+    "hits": 18,
+    "pairs": 37,
+    "duplicatePrecision": 0.5909,
+    "precisionThreshold": 0.75,
+    "flaggedPairs": 22,
+    "selfHitPairs": 25,
+    "pairsWithoutBody": 11,
+    "matchCount": 6,
+    "finalK": 5,
+    "detailPath": "data\\eval_dup_results_baseline-20260920.csv"
+  },
+  "totals": {
+    "wallClockSec": 255.1,
+    "mainElapsedSec": 144.6,
+    "adversarialElapsedSec": 95.3,
+    "modelCalls": 300,
+    "inputTokens": 201529,
+    "outputTokens": 57987,
+    "totalTokens": 259516
+  },
+  "artifacts": {
+    "main": "data\\eval_results_baseline-20260920.csv",
+    "adversarial": "data\\eval_results_baseline-20260920_adversarial.csv"
+  }
+}

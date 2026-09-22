@@ -47,10 +47,12 @@ next-env.d.ts
 __pycache__/
 *.pyc
 
-# Data（原始数据与生成数据均不提交）
-/data/
-/eval_set_*.csv
-/retrieval_corpus.csv
+# Data（检索库与原始数据不提交；评测产物与评测集放行，保证结果可追溯）
+/data/*
+!/data/eval_metrics_*
+!/data/eval_results_*
+!/data/eval_dup_results_*
+!/data/eval_set_*
 
 # dev server 启动日志（每次启动重新生成，无归档价值）
 .dev-server.log

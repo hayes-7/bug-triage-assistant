@@ -1,0 +1,109 @@
+{
+  "completed": [
+    "67584",
+    "67940",
+    "68104",
+    "68819",
+    "69102",
+    "69223",
+    "69488",
+    "69904",
+    "70248",
+    "83401",
+    "83854",
+    "83949",
+    "97096",
+    "97999",
+    "113953",
+    "117222",
+    "119833",
+    "120509",
+    "121297",
+    "121346"
+  ],
+  "failed": [
+    {
+      "number": "121346",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "69904",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "67940",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "120509",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "68819",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "97999",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "69223",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "67584",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "113953",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "69488",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "69102",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "117222",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "119833",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "83949",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "83854",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "121297",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "70248",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "83401",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "68104",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    },
+    {
+      "number": "97096",
+      "error": "传输失败: <urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>"
+    }
+  ],
+  "totalInputTokens": 13148,
+  "totalOutputTokens": 3763,
+  "updatedAt": "2026-09-20T11:01:39+00:00"
+}

@@ -1,0 +1,129 @@
+{
+  "runId": "sev-procedural",
+  "runLabel": "sev-procedural",
+  "createdAt": "2026-09-22T02:05:44+00:00",
+  "finishedAt": "2026-09-22T02:30:26+00:00",
+  "promptVersion": "v1.2",
+  "modelId": "qwen-plus",
+  "config": {
+    "retrievalTopK": 5,
+    "dupThreshold": 0.75,
+    "temperature": 0,
+    "maxInputTokens": 1500
+  },
+  "datasetVersions": {
+    "main": "eval_set_main.csv[280行,sha:0b5a8da9f5b8]",
+    "adversarial": "eval_set_adversarial.csv[20行,sha:ffd5b0d60042]",
+    "dup": "dup_testset.csv[37行,sha:4209a6b4b358]"
+  },
+  "sampleCount": 279,
+  "metrics": {
+    "runId": "sev-procedural",
+    "dataset": "main",
+    "sampleCount": 279,
+    "attemptedCount": 280,
+    "failedCount": 0,
+    "excludedFallbackCount": 1,
+    "promptVersion": "v1.2",
+    "modelId": "qwen-plus",
+    "topicTop1Accuracy": 0.7204301075268817,
+    "topicTop3HitRate": 0.9032258064516129,
+    "topicMacroF1": 0.696495220287263,
+    "perTopicF1": {
+      "editor": 0.6727,
+      "rendering": 0.717,
+      "gui": 0.6667,
+      "gdscript": 0.7778,
+      "core": 0.5185,
+      "platforms": 0.4583,
+      "animation": 0.8485,
+      "buildsystem": 0.7692,
+      "import": 0.8696,
+      "input": 0.6667,
+      "other": 0.0
+    },
+    "severityAccuracy": 0.36200716845878134,
+    "perSeverityF1": {
+      "crash": 0.7434,
+      "high": 0.6667,
+      "normal": 0.0896,
+      "low": 0.0706
+    },
+    "severityConfusionMatrix": {
+      "crash": {
+        "crash": 42,
+        "high": 8,
+        "normal": 0,
+        "low": 21
+      },
+      "high": {
+        "crash": 0,
+        "high": 47,
+        "normal": 1,
+        "low": 22
+      },
+      "normal": {
+        "crash": 0,
+        "high": 11,
+        "normal": 6,
+        "low": 109
+      },
+      "low": {
+        "crash": 0,
+        "high": 5,
+        "normal": 1,
+        "low": 6
+      }
+    },
+    "totalInputTokens": 250012,
+    "totalOutputTokens": 53662,
+    "totalTokens": 303674,
+    "parseSuccessRate": 0.9892857142857143,
+    "retryRate": 0.010714285714285714,
+    "fallbackRate": 0.0035714285714285713,
+    "avgLatencyMs": 4670.9,
+    "p95LatencyMs": 5108.0,
+    "topicTop1AccuracyWithFallbackAsMiss": 0.7178571428571429,
+    "topicTop3HitRateWithFallbackAsMiss": 0.9
+  },
+  "adversarial": {
+    "sampleCount": 20,
+    "correctlyFlaggedRate": 0.3,
+    "correctlyFlagged": 6,
+    "avgTop1TopicConfidenceOnInsufficient": 0.91,
+    "infoSufficiencyDistribution": {
+      "partial": 10,
+      "insufficient": 6,
+      "sufficient": 4
+    },
+    "excludedFallbackCount": 0,
+    "totalInputTokens": 17628,
+    "totalOutputTokens": 3796
+  },
+  "duplicate": {
+    "duplicateRecallAt5": 0.4865,
+    "hits": 18,
+    "pairs": 37,
+    "duplicatePrecision": 0.5909,
+    "precisionThreshold": 0.75,
+    "flaggedPairs": 22,
+    "selfHitPairs": 25,
+    "pairsWithoutBody": 11,
+    "matchCount": 6,
+    "finalK": 5,
+    "detailPath": "data\\eval_dup_results_sev-procedural.csv"
+  },
+  "totals": {
+    "wallClockSec": 1482.3,
+    "mainElapsedSec": 1371.4,
+    "adversarialElapsedSec": 95.4,
+    "modelCalls": 300,
+    "inputTokens": 267640,
+    "outputTokens": 57458,
+    "totalTokens": 325098
+  },
+  "artifacts": {
+    "main": "data\\eval_results_sev-procedural.csv",
+    "adversarial": "data\\eval_results_sev-procedural_adversarial.csv"
+  }
+}
