@@ -31,4 +31,4 @@ export {
   PROMPT_VERSION,
   SYSTEM_PROMPT,
   buildUserPrompt,
-} from "@/prompts/triage_v1_3";
+} from "@/prompts/triage_v2_0";

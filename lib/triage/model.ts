@@ -7,6 +7,7 @@ import {
   generateObject,
 } from "ai";
 
+import { retrieveReference } from "@/lib/retrieval";
 import { MODEL_PARAMS, SYSTEM_PROMPT, buildUserPrompt } from "@/prompts";
 import { TIMEOUTS } from "@/types/contract";
 
@@ -66,7 +67,18 @@ export async function callTriageModel(options: {
   const modelId = process.env.PRIMARY_MODEL_ID?.trim() || DEFAULT_MODEL_ID;
 
   const openai = createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
-  const prompt = buildUserPrompt({ title: options.title, body: options.body });
+
+  // 检索增强：失败时参考材料为空，提示词退回纯 LLM 形态，不影响分诊
+  const reference = await retrieveReference({
+    title: options.title,
+    body: options.body,
+  });
+
+  const prompt = buildUserPrompt({
+    title: options.title,
+    body: options.body,
+    reference: { issues: reference.issues, rules: reference.rules },
+  });
 
   let inputTokens = 0;
   let outputTokens = 0;
