@@ -56,3 +56,10 @@ __pycache__/
 
 # dev server 启动日志（每次启动重新生成，无归档价值）
 .dev-server.log
+
+# 本地验证临时产物（PD-10 界面自检期间生成，不得进入仓库）
+# 注意：*.log 只匹配扩展名为 .log 的文件，不影响 data/ 下评测产物
+# （eval_metrics_*.json / eval_results_*.csv / eval_dup_results_*.csv / eval_set_*.csv 仍可提交）
+*.log
+.tmp-verify/
+tmp_*.ps1

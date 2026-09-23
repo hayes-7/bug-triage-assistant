@@ -16,6 +16,8 @@
 
 import { useCallback, useState } from "react";
 
+import Link from "next/link";
+
 import { SAMPLE_ISSUES, type SampleIssue } from "@/lib/sample-issues";
 import {
   LOW_CONFIDENCE_THRESHOLD,
@@ -130,6 +132,16 @@ export default function TriageWorkbenchPage() {
   return (
     <div className="w-full flex-1 bg-slate-50 font-sans text-slate-900">
       <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+        <nav className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-200 pb-3 text-sm">
+          <span className="font-semibold text-indigo-700">分诊工作台</span>
+          <Link href="/report" className="font-medium text-slate-600 hover:text-indigo-700">
+            评测报告
+          </Link>
+          <Link href="/about" className="font-medium text-slate-600 hover:text-indigo-700">
+            关于
+          </Link>
+        </nav>
+
         <header className="mb-6">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
             Bug 智能分诊工作台
@@ -137,6 +149,15 @@ export default function TriageWorkbenchPage() {
           <p className="mt-2 text-sm leading-6 text-slate-600">
             粘贴一条缺陷报告，得到模块 Top-3 候选、严重度参考值、相似历史 Issue，
             以及模型本次检索到的参考材料。所有判定均为辅助建议，最终归类由人工确认。
+            指标与已知限制见{" "}
+            <Link href="/report" className="font-medium text-indigo-700 underline">
+              评测报告
+            </Link>
+            {" "}与{" "}
+            <Link href="/about" className="font-medium text-indigo-700 underline">
+              关于页
+            </Link>
+            。
           </p>
         </header>
 
