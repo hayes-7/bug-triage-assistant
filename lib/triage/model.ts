@@ -7,7 +7,7 @@ import {
   generateObject,
 } from "ai";
 
-import { retrieveReference } from "@/lib/retrieval";
+import { retrieveReference, type RetrievalResult } from "@/lib/retrieval";
 import { MODEL_PARAMS, SYSTEM_PROMPT, buildUserPrompt } from "@/prompts";
 import { TIMEOUTS } from "@/types/contract";
 
@@ -35,6 +35,12 @@ export type ModelCallResult = {
   outputTokens: number;
   /** 实际重试次数，0 表示首次成功 */
   retryCount: number;
+  /**
+   * 本次调用实际注入提示词的参考材料。
+   * 上抛给路由层，用于填充 TriageResult.references（界面「AI 参考了什么」）。
+   * 检索降级时 ok = false 且 issues / rules 均为空数组，调用方无需特殊处理。
+   */
+  retrieval: RetrievalResult;
 };
 
 /**
@@ -69,7 +75,7 @@ export async function callTriageModel(options: {
   const openai = createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
 
   // 检索增强：失败时参考材料为空，提示词退回纯 LLM 形态，不影响分诊
-  const reference = await retrieveReference({
+  const retrieval = await retrieveReference({
     title: options.title,
     body: options.body,
   });
@@ -77,7 +83,7 @@ export async function callTriageModel(options: {
   const prompt = buildUserPrompt({
     title: options.title,
     body: options.body,
-    reference: { issues: reference.issues, rules: reference.rules },
+    reference: { issues: retrieval.issues, rules: retrieval.rules },
   });
 
   let inputTokens = 0;
@@ -108,7 +114,7 @@ export async function callTriageModel(options: {
       inputTokens += usage.inputTokens ?? 0;
       outputTokens += usage.outputTokens ?? 0;
 
-      return { output: object, modelId, inputTokens, outputTokens, retryCount };
+      return { output: object, modelId, inputTokens, outputTokens, retryCount, retrieval };
     } catch (error) {
       if (options.endToEndSignal?.aborted) throw error;
 
@@ -125,7 +131,8 @@ export async function callTriageModel(options: {
   }
 
   console.error("[triage] 返回降级结果", { modelId, retryCount });
-  return { output: null, modelId, inputTokens, outputTokens, retryCount };
+  // 模型降级不影响检索结果：检索已完成，参考材料照常上抛，界面仍可展示「AI 参考了什么」
+  return { output: null, modelId, inputTokens, outputTokens, retryCount, retrieval };
 }
 
 /**

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import type { RetrievalResult } from "@/lib/retrieval";
 import {
   SEVERITY_LEVELS,
   TOPIC_CATEGORIES,
@@ -8,13 +9,16 @@ import {
   type SeveritySignal,
   type TopicCandidate,
   type TopicCategory,
+  type TriageReferences,
 } from "@/types/contract";
 
 /**
  * 模型负责的三部分：topicCandidates、severity、infoSufficiency。
  *
- * duplicates 与 meta 不在 Schema 内：二者由服务端逻辑填充，
+ * duplicates、references 与 meta 不在 Schema 内：三者由服务端逻辑填充，
  * 模型无法知晓自身响应耗时，也无法访问检索库。
+ * 尤其 references 必须来自检索层的真实返回——若交给模型输出，
+ * 模型会编造 issue 编号，界面「AI 参考了什么」即失去可核对性。
  */
 
 const TOPIC_VALUES = [...TOPIC_CATEGORIES] as [TopicCategory, ...TopicCategory[]];
@@ -86,4 +90,38 @@ export function normalizeModelOutput(output: ModelOutput): NormalizedModelOutput
 function normalizeSignals(signals: SeveritySignal[]): SeveritySignal[] {
   const hits = Array.from(new Set(signals)).filter((signal) => signal !== "none");
   return hits.length > 0 ? hits : ["none"];
+}
+
+/**
+ * 把检索层结果映射为契约的 references 字段。
+ *
+ * 逐字段显式白名单拷贝，不使用展开运算：
+ * 检索层日后若多带出 gt_topics / html_url 等字段，展开会把它们一并泄漏到响应里，
+ * 而白名单拷贝在这种情况下仍然安全。
+ *
+ * 降级（retrieval.ok = false）时两个数组均为空数组，不返回 null。
+ * 检索层已按相似度升序距离排序（RPC 的 order by 距离），此处保持原序即为相似度降序。
+ */
+export function normalizeReferences(retrieval: RetrievalResult): TriageReferences {
+  return {
+    issues: retrieval.issues.map((issue) => ({
+      number: issue.number,
+      title: issue.title,
+      // 检索层当前未透出 similarity（见 types/contract.ts 的 ReferenceIssue 注释），
+      // 这里按可选字段处理：拿到就带上，拿不到就不写，绝不填 0 充数
+      ...pickSimilarity(issue),
+    })),
+    rules: retrieval.rules.map((rule) => ({
+      labelName: rule.labelName,
+      ruleText: rule.ruleText,
+      ...pickSimilarity(rule),
+    })),
+  };
+}
+
+/** 仅当来源对象真的带了 0–1 的 similarity 时才产出该键，否则产出空对象 */
+function pickSimilarity(source: unknown): { similarity?: number } {
+  const value = (source as { similarity?: unknown } | null)?.similarity;
+  if (typeof value !== "number" || !Number.isFinite(value)) return {};
+  return { similarity: Math.min(1, Math.max(0, value)) };
 }

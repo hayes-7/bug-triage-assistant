@@ -93,6 +93,45 @@ export type DuplicateCandidate = {
   url: string;
 };
 
+/**
+ * 检索到的相似历史 Issue（v2.0 参考材料，用于界面「AI 参考了什么」）
+ *
+ * 防泄漏（硬性）：仅透出 number / title / similarity。
+ * 绝不包含 gt_topics / gt_severity / body / html_url——
+ * 前者等同于把标准答案透给界面与模型，会让评测指标失真。
+ */
+export type ReferenceIssue = {
+  number: number;
+  title: string;
+  /**
+   * 0–1，向量余弦相似度。
+   * 可选：检索层（lib/retrieval.ts）当前只透出 number / title，
+   * 未把 RPC 返回的 similarity 带出来，故该值可能缺失。
+   * 缺失时界面不显示相似度，不显示 0%（0% 是错误结论而非「未知」）。
+   */
+  similarity?: number;
+};
+
+/** 检索到的官方规则条文（v2.0 参考材料） */
+export type ReferenceRule = {
+  labelName: string;
+  ruleText: string;
+  /** 0–1，向量余弦相似度。可选，原因同 ReferenceIssue.similarity */
+  similarity?: number;
+};
+
+/**
+ * v2.0 检索到的参考材料，供界面展示「AI 参考了什么」。
+ * 检索降级（embedding / RPC 失败、超时、配置缺失）时两个数组均为空数组，
+ * 不返回 null——调用方只需判断 length，无需区分 null 与空。
+ */
+export type TriageReferences = {
+  /** 相似历史 Issue，按相似度降序；检索降级时为空数组 */
+  issues: ReferenceIssue[];
+  /** 官方规则条文，按相似度降序；检索降级时为空数组 */
+  rules: ReferenceRule[];
+};
+
 export type TriageMeta = {
   /** 单次请求标识，用于日志关联与问题定位 */
   requestId: string;
@@ -134,6 +173,16 @@ export type TriageResult = {
   isDuplicate: boolean;
 
   infoSufficiency: InfoSufficiency;
+
+  /**
+   * v2.0 检索到的参考材料，可选字段。
+   *
+   * 为什么可选：v1.x 无检索环节，不返回本字段；界面须能在缺省时正常工作，
+   * 因此不得升为必填，否则旧版本响应即视为违约。
+   * 实现方（v2.0）在检索降级时返回两个空数组而非省略字段，
+   * 界面据此区分「没检索到」与「该版本不支持检索」。
+   */
+  references?: TriageReferences;
 
   meta: TriageMeta;
 };
@@ -308,8 +357,16 @@ export const SEVERITY_LEVELS: readonly SeverityLevel[] = [
 
 /** 超时阈值（毫秒） */
 export const TIMEOUTS = {
-  /** 检索超时后跳过检索，不阻断模型判定 */
-  retrieval: 3_000,
+  /**
+   * 检索超时后跳过检索，不阻断模型判定。
+   *
+   * 3_000 → 5_000（实测调整）：3 秒下约 1/3 请求在 rpc 阶段超时降级
+   *（日志 reason: '检索超过 3000 毫秒'，elapsedMs 普遍 3006–3016，即卡在阈值上），
+   * references 随之变成空数组、界面「AI 参考了什么」时有时无。
+   * 端到端预算 45 秒、模型调用本身约 5–7 秒，检索多给 2 秒不构成风险。
+   * 注意：本值只影响降级概率，不改变检索逻辑与注入内容，故不触发 Prompt 版本升级。
+   */
+  retrieval: 5_000,
   model: 30_000,
   endToEnd: 45_000,
 } as const;

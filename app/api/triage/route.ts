@@ -2,16 +2,28 @@ import { randomUUID } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
+import type { RetrievalResult } from "@/lib/retrieval";
 import { truncateToTokenLimit } from "@/lib/truncate";
+import {
+  buildIssueUrl,
+  resolveDupDisplayMin,
+  resolveDupThreshold,
+} from "@/lib/triage/config";
 import { errorResponse } from "@/lib/triage/errors";
 import { MissingModelApiKeyError, callTriageModel } from "@/lib/triage/model";
-import { normalizeModelOutput, type ModelOutput } from "@/lib/triage/schema";
+import {
+  normalizeModelOutput,
+  normalizeReferences,
+  type ModelOutput,
+} from "@/lib/triage/schema";
 import { PROMPT_VERSION } from "@/prompts";
 import {
   TIMEOUTS,
+  type DuplicateCandidate,
   type ErrorResponse,
   type TriageInput,
   type TriageMeta,
+  type TriageReferences,
   type TriageResult,
 } from "@/types/contract";
 
@@ -105,7 +117,12 @@ export async function POST(
       timestamp: new Date().toISOString(),
     };
 
-    return NextResponse.json(buildResult(modelCall.output, meta), { status: 200 });
+    const references = normalizeReferences(modelCall.retrieval);
+
+    return NextResponse.json(
+      buildResult(modelCall.output, modelCall.retrieval, references, meta),
+      { status: 200 },
+    );
   } catch (error) {
     if (endToEndTimedOut) {
       return errorResponse(
@@ -127,8 +144,12 @@ export async function POST(
 }
 
 /** 模型输出为空时返回降级结果，HTTP 状态码仍为 200，不虚构候选类别 */
-function buildResult(output: ModelOutput | null, meta: TriageMeta): TriageResult {
-  // TODO: 向量检索未实现，duplicates/isDuplicate 临时固定，详见 resolveDuplicates
+function buildResult(
+  output: ModelOutput | null,
+  retrieval: RetrievalResult,
+  references: TriageReferences,
+  meta: TriageMeta,
+): TriageResult {
   if (!output) {
     /**
      * 降级结果中的 severity.level 与 infoSufficiency 是枚举占位值，不是模型判定结果：
@@ -140,8 +161,11 @@ function buildResult(output: ModelOutput | null, meta: TriageMeta): TriageResult
     return {
       topicCandidates: [],
       severity: { level: "low", confidence: 0, signals: ["none"] },
-      ...resolveDuplicates(),
+      // 查重与模型无关：检索已完成，候选照常透出
+      ...resolveDuplicates(retrieval),
       infoSufficiency: "insufficient",
+      // references 与模型无关：检索已完成，照常透出，界面仍可展示「AI 参考了什么」
+      references,
       meta,
     };
   }
@@ -151,20 +175,90 @@ function buildResult(output: ModelOutput | null, meta: TriageMeta): TriageResult
   return {
     topicCandidates: normalized.topicCandidates,
     severity: normalized.severity,
-    ...resolveDuplicates(),
+    ...resolveDuplicates(retrieval),
     infoSufficiency: normalized.infoSufficiency,
+    references,
     meta,
   };
 }
 
 /**
- * TODO: 向量检索尚未实现，此处固定返回空结果。
+ * 由检索结果填充查重字段。
  *
- * 接入真实检索后：查询 Top-5 相似 issue，按 similarity 降序返回 0–5 项
- * （每项须带可跳转的 url），并在 duplicates[0].similarity >= DUP_THRESHOLD
- * 且模型语义确认时置 isDuplicate = true。检索超时（TIMEOUTS.retrieval）
- * 时跳过检索，不阻断模块判定。
+ * ── 数据来源 ──
+ * 复用 lib/retrieval.ts 已完成的那一次 match_issues 检索
+ *（retrieval.duplicateCandidates，Top-5，按相似度降序），
+ * 不额外发起检索、不新增 RPC：查重与参考材料本就基于同一个 query embedding
+ * 和同一份候选列表，再查一次只会翻倍延迟与超时概率。
+ *
+ * ── 防泄漏 ──
+ * match_issues() 的 SQL 内置 `where i.in_eval_set = false`
+ *（scripts/import_to_supabase.py 的函数定义），评测集样本不可能进入候选，
+ * 该过滤由数据库侧保证，本次未改动 RPC，故过滤仍然生效。
+ *
+ * ── 展示下限与语义分区 ──
+ * 检索侧的 MATCH_THRESHOLD（0.5）是 references 的召回下限，对查重列表过宽，
+ * 故此处按 resolveDupDisplayMin() 再筛一道，三段语义分区：
+ *   similarity >= DUP_THRESHOLD（0.75）      展示，且 isDuplicate = true
+ *   DUP_DISPLAY_MIN ~ DUP_THRESHOLD          展示，但 isDuplicate = false
+ *   similarity <  DUP_DISPLAY_MIN（0.70）    不展示
+ * 过滤只作用于 duplicates（面向人的展示列表）。
+ * references 走另一条路径（normalizeReferences → retrieval.issues 前 3 条），
+ * 不受本过滤影响，注入给模型的内容因此逐字不变。
+ * 过滤后不足 5 条即少几条，契约允许 duplicates 为 0–5 项。
+ *
+ * ── isDuplicate 判定（MVP）──
+ * 条件：duplicates 非空 且 duplicates[0].similarity >= 阈值。
+ * 阈值来源：lib/triage/config.ts 的 resolveDupThreshold()，
+ * 默认取契约常量 DUP_THRESHOLD_INITIAL（0.75），可由环境变量 DUP_THRESHOLD 覆盖，
+ * 与 EvalConfig.dupThreshold 同源，不在此处硬编码。
+ * 与契约 PD-04 第 4.3 节的差异：该节要求再叠加「模型语义确认」，
+ * 当前模型 Schema 无此输出字段（见 lib/triage/schema.ts 的说明），
+ * 故 MVP 只做阈值判定，语义确认待后续版本补齐。
+ * 正因缺这一条，界面不宣称「重复」，只陈述相似度并交人工核对（见 app/page.tsx）。
+ *
+ * ── 降级 ──
+ * 检索失败或超时时 duplicateCandidates 为空数组，本函数返回
+ * { duplicates: [], isDuplicate: false }，绝不返回 null，
+ * HTTP 状态码仍为 200，topic / severity 主流程不受影响。
  */
-function resolveDuplicates(): Pick<TriageResult, "duplicates" | "isDuplicate"> {
-  return { duplicates: [], isDuplicate: false };
+function resolveDuplicates(
+  retrieval: RetrievalResult,
+): Pick<TriageResult, "duplicates" | "isDuplicate"> {
+  const displayMin = resolveDupDisplayMin();
+
+  const duplicates: DuplicateCandidate[] = retrieval.duplicateCandidates.flatMap(
+    (candidate) => {
+      /**
+       * 契约要求 DuplicateCandidate.similarity 必填。
+       * 检索层的 similarity 是可选字段（RPC 异常时可能缺失），
+       * 缺失时丢弃该条而不是补 0：0 相似度是一个错误的结论，
+       * 会让界面把完全不相关的 Issue 当成查重候选展示。
+       */
+      if (candidate.similarity === undefined) {
+        console.warn("[triage] 查重候选缺少 similarity，已丢弃", {
+          issueNumber: candidate.number,
+        });
+        return [];
+      }
+
+      // 低于展示下限的弱相关项不进列表（检索侧仍取回，references 不受影响）
+      if (candidate.similarity < displayMin) return [];
+
+      return [
+        {
+          issueNumber: candidate.number,
+          title: candidate.title,
+          similarity: candidate.similarity,
+          url: buildIssueUrl(candidate.number, candidate.htmlUrl),
+        },
+      ];
+    },
+  );
+
+  const dupThreshold = resolveDupThreshold();
+  const topSimilarity = duplicates[0]?.similarity ?? 0;
+  const isDuplicate = duplicates.length > 0 && topSimilarity >= dupThreshold;
+
+  return { duplicates, isDuplicate };
 }
