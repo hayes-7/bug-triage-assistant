@@ -37,7 +37,7 @@ export type ModelCallResult = {
   retryCount: number;
   /**
    * 本次调用实际注入提示词的参考材料。
-   * 上抛给路由层，用于填充 TriageResult.references（界面「AI 参考了什么」）。
+   * 上抛给路由层，用于填充 TriageResult.references（契约字段，界面不再单独渲染）。
    * 检索降级时 ok = false 且 issues / rules 均为空数组，调用方无需特殊处理。
    */
   retrieval: RetrievalResult;
@@ -131,7 +131,8 @@ export async function callTriageModel(options: {
   }
 
   console.error("[triage] 返回降级结果", { modelId, retryCount });
-  // 模型降级不影响检索结果：检索已完成，参考材料照常上抛，界面仍可展示「AI 参考了什么」
+  // 模型降级不影响检索结果：检索已完成，参考材料照常上抛，
+  // 契约字段照常返回（界面不再单独渲染，见 app/page.tsx 的 ResultCard 注释）
   return { output: null, modelId, inputTokens, outputTokens, retryCount, retrieval };
 }
 

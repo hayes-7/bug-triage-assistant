@@ -18,7 +18,7 @@ import {
  * duplicates、references 与 meta 不在 Schema 内：三者由服务端逻辑填充，
  * 模型无法知晓自身响应耗时，也无法访问检索库。
  * 尤其 references 必须来自检索层的真实返回——若交给模型输出，
- * 模型会编造 issue 编号，界面「AI 参考了什么」即失去可核对性。
+ * 模型会编造 issue 编号，这些记录即失去可核对性。
  */
 
 const TOPIC_VALUES = [...TOPIC_CATEGORIES] as [TopicCategory, ...TopicCategory[]];

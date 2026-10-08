@@ -236,8 +236,7 @@ export default function TriageWorkbenchPage() {
             Bug 智能分诊工作台
           </h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            粘贴一条缺陷报告，得到模块 Top-3 候选、严重度参考值、相似历史 Issue，
-            以及模型本次检索到的参考材料。所有判定均为辅助建议，最终归类由人工确认。
+            粘贴一条缺陷报告，得到模块 Top-3 候选、严重度参考值，以及相似历史 Issue（模型判定时也读入了这些记录）。所有判定均为辅助建议，最终归类由人工确认。
             指标与已知限制见{" "}
             <Link href="/report" className="font-medium text-indigo-700 underline">
               评测报告
@@ -527,7 +526,7 @@ function ResultCard({ result }: { result: TriageResult }) {
   const review = evaluateManualReview(result);
 
   /**
-   * 结果卡片内不再渲染 references（原「AI 参考了什么」区块）。
+   * 结果卡片内不再渲染 references（原独立的「参考材料」区块）。
    *
    * 原因：检索层一次 match_issues 的结果同时喂给 references.issues（slice 0-3）
    * 与 duplicates（slice 0-5），两者是同一批记录，内容必然重复；
@@ -913,7 +912,7 @@ function SeveritySection({ severity }: { severity: TriageResult["severity"] }) {
  *
  * 这批记录有双重身份：既是查重候选，也是注入模型、影响模块判定的材料——
  * 检索层同一批 match_issues 结果分别 slice 成 references 与 duplicates。
- * 原「AI 参考了什么」区块因此删除，可解释性说明并入本区块，详见 ResultCard 处的注释。
+ * 原独立的「参考材料」区块因此删除，可解释性说明并入本区块，详见 ResultCard 处的注释。
  *
  * 相似度用百分比（formatPercent）、阈值与置信度用两位小数（formatScore）：
  * 前者表达给用户的强弱感受，后者要能与契约常量、评测脚本、日志直接对照。
@@ -937,7 +936,7 @@ function DuplicatesSection({
       ) : (
         <>
           {/*
-            原「AI 参考了什么」区块的可解释性说明，合并到此处。
+            原独立「参考材料」区块的可解释性说明，合并到此处。
             因为 references.issues 就是 duplicates 的前 3 条（见检索层 slice 口径），
             与其另起一块重复同一批记录，不如在此说明这批记录的双重身份：
             既是查重候选，也是注入模型、影响模块判定的材料。

@@ -164,7 +164,9 @@ function buildResult(
       // 查重与模型无关：检索已完成，候选照常透出
       ...resolveDuplicates(retrieval),
       infoSufficiency: "insufficient",
-      // references 与模型无关：检索已完成，照常透出，界面仍可展示「AI 参考了什么」
+      // references 与模型无关：检索已完成，照常透出，契约字段保留
+      // 界面不再单独渲染它——references.issues 与 duplicates 同源（即为 duplicates 的前 3 条），
+      // 并列展示会重复；可解释性说明已并入「相似历史 Issue」区块
       references,
       meta,
     };
