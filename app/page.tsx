@@ -541,6 +541,39 @@ function buildLowConfidenceCause(input: {
   return causes.length > 0 ? `原因：${causes.join("；")}。` : null;
 }
 
+/**
+ * 主文案：只陈述实际触发的条件，不写「或」。
+ *
+ * 原为静态枚举「信息不足或置信度低于阈值（实际 X，阈值 Y）」，
+ * 只触发信息不足时会输出「置信度低于阈值（实际 0.85，阈值 0.50）」这类自相矛盾的文案
+ * （实测信息不足样本即如此：0.85 高于 0.50）。
+ * 因此阈值数字只在置信度确实低于阈值时出现。
+ */
+function buildLowConfidenceHeadline(input: {
+  infoSufficiency: TriageResult["infoSufficiency"];
+  topOneConfidence?: number;
+}): string {
+  const byInsufficient = input.infoSufficiency === "insufficient";
+  const confidence = input.topOneConfidence;
+
+  // 阈值数字只在这一支出现：置信度确实低于阈值
+  if (confidence !== undefined && confidence < LOW_CONFIDENCE_THRESHOLD) {
+    const score = `（实际 ${formatScore(confidence)}，阈值 ${formatScore(
+      LOW_CONFIDENCE_THRESHOLD,
+    )}）`;
+    return byInsufficient
+      ? `这条描述的信息不足，且模型自评置信度低于阈值${score}，判定不可完全采纳，建议人工归类。`
+      : `模型自评置信度低于阈值${score}，判定不可完全采纳，建议人工归类。`;
+  }
+
+  if (byInsufficient) {
+    return "这条描述的信息不足，模型判定不可完全采纳，建议人工归类。";
+  }
+
+  // 兜底：横幅显示但两个语义条件都没命中（如降级路径），避免主文案空白
+  return "模型判定不可完全采纳，建议人工归类。";
+}
+
 function LowConfidenceBanner({
   topOneConfidence,
   infoSufficiency,
@@ -552,13 +585,12 @@ function LowConfidenceBanner({
   fallbackUsed: boolean;
   reasons: string[];
 }) {
-  const actual =
-    topOneConfidence === undefined ? "无模块候选" : formatScore(topOneConfidence);
   const cause = buildLowConfidenceCause({
     fallbackUsed,
     infoSufficiency,
     topOneConfidence,
   });
+  const headline = buildLowConfidenceHeadline({ infoSufficiency, topOneConfidence });
 
   return (
     <section
@@ -571,10 +603,7 @@ function LowConfidenceBanner({
         </span>
         <div className="min-w-0">
           <p className="text-base font-bold text-amber-900">建议人工确认</p>
-          <p className="mt-1 text-sm leading-6 text-amber-900">
-            该缺陷描述信息不足或置信度低于阈值（实际 {actual}，阈值{" "}
-            {formatScore(LOW_CONFIDENCE_THRESHOLD)}），模型判定不可完全采纳，建议人工归类。
-          </p>
+          <p className="mt-1 text-sm leading-6 text-amber-900">{headline}</p>
           {cause !== null && (
             <p className="mt-1 text-sm leading-6 font-medium text-amber-900">
               {cause}
