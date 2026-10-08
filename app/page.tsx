@@ -12,6 +12,13 @@
  *   error   失败  —— 展示错误码与文案，并提供「重试」入口（复用上次提交内容）
  *   success 成功  —— 结果卡片；命中人工复核条件时卡片上方强制显示「建议人工确认」
  *                    （判定见 evaluateManualReview）
+ *
+ * 本文件的界面取舍几乎全部来自 D21 的一次真实用户实测（1 位用户），而非设计偏好：
+ * 每一处提示文案都能追溯到用户当时的一句误解。改文案前请先读对应位置的注释，
+ * 那里的实测证据是本项目真正的工程资产，别处查不到。
+ *
+ * 注释只记 Why：为什么这么写、踩过什么坑、实测数据是多少、不这么做会怎样；
+ * 不记 What（代码本身已在做的事）。宁可少而准，不为凑密度写复述式注释。
  */
 
 import { useCallback, useState } from "react";
@@ -27,7 +34,16 @@ import {
   type TriageResult,
 } from "@/types/contract";
 
-/** 严重度准确率标注（硬性要求，不得省略） */
+/**
+ * 严重度准确率标注（硬性要求，不得省略）。
+ *
+ * 为什么必须写：严重度四档判定经六批实验验证存在能力上限——
+ * 当前准确率 44.29%，低于「一律猜最常见的那一档」的朴素基线 56.43%。
+ * 也就是说这个字段目前不如瞎猜，只能当参考值，绝不能当结论用。
+ *
+ * 不标注的话，用户会把「崩溃」这个红底徽章当成已验证的事实直接拿去排期。
+ * 因此这行小字必须与徽章同屏出现，删掉、变灰或移进折叠区都视为违约。
+ */
 const SEVERITY_ACCURACY_NOTE = "参考值 · 实测准确率约 44%";
 
 /**
@@ -41,6 +57,13 @@ const SEVERITY_ACCURACY_NOTE = "参考值 · 实测准确率约 44%";
 const TOPIC_CONFIDENCE_NOTE =
   "百分比表示候选之间的相对强弱，不代表这条判断正确的概率";
 
+/**
+ * 契约枚举 → 中文标签。
+ *
+ * 为什么用 Record<TopicCategory, string> 而不是普通对象：
+ * 契约新增或改名一个模块档位时，这里会直接编译报错，不会漏翻、也不会留下 undefined 标签。
+ * 界面一律不自创契约里没有的档位——模块归属是评测口径，多一个少一个都会让界面与评测对不上。
+ */
 const TOPIC_LABELS: Record<TopicCategory, string> = {
   editor: "编辑器",
   rendering: "渲染",
@@ -62,6 +85,11 @@ const SEVERITY_LABELS: Record<SeverityLevel, string> = {
   low: "低",
 };
 
+/**
+ * 四档配色只承载「档位高低」这一个信息，不承载「判定可靠」的含义——
+ * 可靠性由旁边的准确率标注单独说明。两者不混用：
+ * 颜色越醒目只表示越严重，不表示这个严重度判得越准。
+ */
 const SEVERITY_STYLES: Record<SeverityLevel, string> = {
   crash: "bg-red-100 text-red-800 ring-red-300",
   high: "bg-orange-100 text-orange-800 ring-orange-300",
@@ -69,12 +97,23 @@ const SEVERITY_STYLES: Record<SeverityLevel, string> = {
   low: "bg-slate-100 text-slate-700 ring-slate-300",
 };
 
+/**
+ * 为什么这里用 as const 而不是 Record<InfoSufficiency, string>：
+ * 信息充分度只作展示，不参与任何界面分支——触发判定直接读 result.infoSufficiency
+ * （见 evaluateManualReview），文案与枚举不绑定也不会出现漏档位。
+ * 好处是契约后续调整充分度命名时，界面不必跟着改。
+ */
 const SUFFICIENCY_LABELS = {
   sufficient: "信息充分",
   partial: "信息部分充分",
   insufficient: "信息不足",
 } as const;
 
+/**
+ * 为什么用判别联合而不是多个 boolean（isLoading / isError / result）：
+ * 多个 boolean 会允许「正在加载且已失败」这类非法组合，渲染时只能靠 if 的书写顺序兜底；
+ * 判别联合让非法状态无法被表示，且 success 态下 result 一定有值，不必再写非空断言。
+ */
 type ViewState =
   | { status: "idle" }
   | { status: "loading" }
@@ -87,7 +126,12 @@ export default function TriageWorkbenchPage() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [view, setView] = useState<ViewState>({ status: "idle" });
-  /** 保存最近一次真正发出的请求内容，供错误态「重试」复用 */
+  /**
+   * 保存最近一次真正发出的请求内容，供错误态「重试」复用。
+   *
+   * 为什么存「已发出的内容」而不是输入框当前值：失败后用户可能已经改动了输入，
+   * 重试必须重放当初那一次请求，否则既复现不了报错，也分不清是偶发还是必现。
+   */
   const [lastSubmission, setLastSubmission] = useState<Submission | null>(null);
 
   const runTriage = useCallback(async (submission: Submission) => {
@@ -101,8 +145,13 @@ export default function TriageWorkbenchPage() {
         body: JSON.stringify(submission),
       });
 
+      // 解析失败不能直接抛：网关或代理在超时、5xx 时常返回一段 HTML 错误页，
+      // 若在此抛出，就会用「无法连接」盖掉真正有用的 HTTP 状态码分支。
+      // 因此解析一律降级为 null，交给下面的 !response.ok 统一处理。
       const payload: unknown = await response.json().catch(() => null);
 
+      // 优先取后端错误码：RATE_LIMITED / MODEL_UNAVAILABLE 这类码比 HTTP 状态更能定位问题，
+      // 取不到时才退回 HTTP_${status}，保证界面永远不会出现没有码的错误态。
       if (!response.ok) {
         const error = (payload as ErrorResponse | null)?.error;
         setView({
@@ -113,9 +162,13 @@ export default function TriageWorkbenchPage() {
         return;
       }
 
+      // 不做运行时 schema 校验：响应结构由 types/contract 与后端约定保证。
+      // 且校验失败会在渲染时立刻暴露（缺字段会渲染成空白），
+      // 比在界面层吞掉异常、静默展示半张卡片更容易被发现。
       setView({ status: "success", result: payload as TriageResult });
     } catch (error) {
-      // 网络中断 / 跨域 / 服务未启动等 fetch 层失败
+      // 网络中断 / 跨域 / 服务未启动等 fetch 层失败：没有 HTTP 状态码可用，
+      // 只能给出可操作的排查方向，不伪装成业务错误码。
       setView({
         status: "error",
         code: "NETWORK_ERROR",
@@ -127,13 +180,29 @@ export default function TriageWorkbenchPage() {
     }
   }, []);
 
+  /**
+   * 只要求标题非空：契约里 body 允许为空串（长度 0–50000），
+   * 真实缺陷报告里也确实存在只有标题的情况，强制正文会把这类输入挡在门外。
+   * loading 期间禁用是为了拦住重复提交——每次提交都要跑一次检索加模型调用，
+   * 重复提交的代价是双倍耗时与双倍 token。
+   */
   const canSubmit = title.trim().length > 0 && view.status !== "loading";
 
   function handleSubmit() {
     if (!canSubmit) return;
+    // void 掉 Promise：结果一律经 setView 反映到界面，此处 await 之后没有后续动作，
+    // 留下悬空 Promise 会在 lint 与严格模式下报错。
     void runTriage({ title: title.trim(), body });
   }
 
+  /**
+   * 填充示例后主动把视图拨回 idle。
+   *
+   * D21 实测：用户点完示例按钮后认为「这个网页的目的已经完成了」，
+   * 原因是示例一填进去，页面看起来就像已经分诊过一次。
+   * 回到空态是为了让示例明确停在「待提交」这一步，
+   * 主路径（输入自己的 bug）不被"已完成"的错觉掩盖。
+   */
   function fillSample(sample: SampleIssue) {
     setTitle(sample.title);
     setBody(sample.body);
@@ -143,6 +212,10 @@ export default function TriageWorkbenchPage() {
   return (
     <div className="w-full flex-1 bg-slate-50 font-sans text-slate-900">
       <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+        {/*
+          导航只放两个外链：指标口径与已知限制全部外置到报告页与关于页。
+          主页面的职责是完成一次分诊，首屏若被免责声明占满，输入区就会被挤下去。
+        */}
         <nav className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-200 pb-3 text-sm">
           <span className="font-semibold text-indigo-700">分诊工作台</span>
           <Link href="/report" className="font-medium text-slate-600 hover:text-indigo-700">
@@ -154,6 +227,11 @@ export default function TriageWorkbenchPage() {
         </nav>
 
         <header className="mb-6">
+          {/*
+            这句说明同时承担两个作用：说清"能得到什么"，以及声明"只是辅助建议"。
+            后半句不可删——所有判定均为辅助建议、最终归类由人工确认，
+            这是本工具对外的统一口径，报告页与关于页也是同一说法。
+          */}
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
             Bug 智能分诊工作台
           </h1>
@@ -175,6 +253,11 @@ export default function TriageWorkbenchPage() {
         <SamplePicker onPick={fillSample} disabled={view.status === "loading"} />
 
         <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          {/*
+            maxLength 与契约长度上限对齐（title 1–500、body 0–50000）：
+            在输入框先夹一道，而不是等提交后被 BODY_TOO_LONG 打回。
+            超限输入往往是粘贴进来的整段日志，写完才发现被拒的代价更高。
+          */}
           <label className="block">
             <span className="text-sm font-medium text-slate-800">缺陷标题</span>
             <span className="ml-1 text-xs text-slate-400">必填 · 最长 500 字符</span>
@@ -190,6 +273,8 @@ export default function TriageWorkbenchPage() {
 
           <label className="mt-4 block">
             <span className="text-sm font-medium text-slate-800">缺陷正文</span>
+            {/* 「越完整判定越准」不是客套话：信息充分度是低置信提示的主触发条件之一，
+                正文越完整越不容易被判成信息不足（见 evaluateManualReview）。 */}
             <span className="ml-1 text-xs text-slate-400">可留空 · 越完整判定越准</span>
             <textarea
               value={body}
@@ -202,6 +287,11 @@ export default function TriageWorkbenchPage() {
           </label>
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/*
+              字数与耗时预期放在按钮同一行：提交前最后一刻的犹豫
+              （内容是不是太长、点下去是不是卡住了）在这一行就能消解，
+              不必移开视线去找说明。
+            */}
             <p className="text-xs text-slate-500">
               正文 {body.length.toLocaleString("zh-CN")} 字符 · 单条分诊约需 5 秒
             </p>
@@ -237,6 +327,16 @@ export default function TriageWorkbenchPage() {
 // 示例一键填充
 // ============================================================
 
+/**
+ * 示例一键填充。
+ *
+ * D21 实测：用户点完示例按钮后认为「这个网页的目的已经完成了」，
+ * 没有意识到下一步应该换成自己的 bug。示例的本意是降低门槛
+ * （没有现成素材也能立刻看到效果），但不能盖住主路径。
+ *
+ * 因此标题与说明都写明示例只是演示、看完要换自己的内容；
+ * 但不删按钮、不提高使用成本——降低门槛的作用仍需保留。
+ */
 function SamplePicker({
   onPick,
   disabled,
@@ -283,6 +383,13 @@ function SamplePicker({
 // 空态
 // ============================================================
 
+/**
+ * 空态不留白屏，是四态之一。
+ *
+ * 一进页面就渲染结果区，是为了让「填完会得到什么」有明确的位置预期；
+ * 留白会让首次访问的人分不清这里是加载中还是出错了。
+ * 引导同时指向输入区与示例按钮——与 SamplePicker 的引导是同一条主路径。
+ */
 function EmptyState() {
   return (
     <section className="rounded-xl border border-dashed border-slate-300 bg-white/60 px-4 py-10 text-center">
@@ -300,6 +407,19 @@ function EmptyState() {
 // 加载态（骨架屏）
 // ============================================================
 
+/**
+ * 加载态：骨架屏 + 明确耗时预期。
+ *
+ * 为什么写明「约 5 秒」：v2.0 单次端到端实测约 5 秒，不写预期的话用户会在两三秒时
+ * 以为卡住而重复提交——每次提交都要跑一次检索与模型调用，重复提交的代价是双倍耗时与 token。
+ *
+ * 为什么骨架的三块与结果卡片的三块（模块 / 严重度 / 相似 Issue）一一对应：
+ * 骨架只占位不表达内容，但块数与大致高度一致，结果返回时布局不跳动，
+ * 用户不会误以为页面被重排、怀疑看到的是另一次请求的结果。
+ *
+ * aria-busy / aria-live 是给读屏用户的等价信息：视觉上有转圈，
+ * 听觉上也要知道「正在加载」而不是页面无响应。
+ */
 function LoadingSkeleton() {
   return (
     <section
@@ -341,6 +461,16 @@ function LoadingSkeleton() {
 // 错误态
 // ============================================================
 
+/**
+ * 错误态。
+ *
+ * role="alert" 是硬性要求：分诊失败属于需要立刻被感知的阻断性结果，
+ * 不能被读屏软件当普通文本跳过。
+ *
+ * 为什么必须给「重试」并复用 lastSubmission：一次分诊约 5 秒、内容还要手动粘贴，
+ * 失败后让人重填一遍的代价远高于重试本身；且重试重放的是当初那次请求，
+ * 否则偶发失败永远无法复现。
+ */
 function ErrorState({
   code,
   message,
@@ -384,18 +514,35 @@ function ErrorState({
 // 结果卡片
 // ============================================================
 
+/**
+ * 结果卡片的装配顺序是有讲究的：
+ *   琥珀横幅（建议人工确认）→ 降级红标 → 结果卡片 → 元信息。
+ *
+ * 需要人工介入的信息一律放在最上方、先于任何判定值出现：
+ * 否则用户会先读到模块与严重度，把「已经看完结论」当成既定事实，
+ * 再看到提示时已经不会回头改判断了。
+ */
 function ResultCard({ result }: { result: TriageResult }) {
   const top1 = result.topicCandidates[0];
   const review = evaluateManualReview(result);
 
   /**
-   * references 整块的显隐只看 issues：
-   * rules 小块已按下述原因停止渲染（见 ReferencesSection），
-   * 若仍把 rules 计入显隐条件，会在「只有 rules、没有 issues」时
-   * 渲染出一个空容器。
+   * 结果卡片内不再渲染 references（原「AI 参考了什么」区块）。
+   *
+   * 原因：检索层一次 match_issues 的结果同时喂给 references.issues（slice 0-3）
+   * 与 duplicates（slice 0-5），两者是同一批记录，内容必然重复；
+   * 并列展示时条目与相似度百分比完全一致（实测 #100014 77% / #99414 71% /
+   * #83236 71%），用户第一反应是「这两项是否重复推送」，反而损害可信度。
+   * 可解释性说明改为并入下方的 DuplicatesSection。
+   *
+   * 只停前端渲染：types/contract.ts 的 references 字段、
+   * app/api/triage/route.ts 的返回、lib/retrieval.ts 的 slice 口径一律不动，
+   * 契约与注入给模型的内容保持原样。
+   *
+   * 附：references.rules 更早之前就已停止渲染——规则是标签定义文本，与缺陷描述的
+   * 语义空间不同，相似度区分度低，展示会削弱可信度。v2.1 计划改为按模型候选类别名
+   * 匹配规则并通过 rules-by-topic 批次评测后再议。该字段后端照常返回，本次不动。
    */
-  const references = result.references;
-  const hasReferences = references !== undefined && references.issues.length > 0;
 
   return (
     <div className="space-y-4">
@@ -449,8 +596,6 @@ function ResultCard({ result }: { result: TriageResult }) {
         </div>
       </section>
 
-      {hasReferences && <ReferencesSection references={references} />}
-
       <MetaFooter result={result} />
     </div>
   );
@@ -468,6 +613,9 @@ function ResultCard({ result }: { result: TriageResult }) {
  * 却同时把 infoSufficiency 判成 insufficient。
  * 即「信息是否充足」这项语义判定可用，而「置信度数值」不可用。
  * 因此以 fallbackUsed / infoSufficiency 为主触发，置信度阈值仅作兜底。
+ *
+ * 换言之，任何低于 0.75 的数值阈值都永不触发，是死阈值；
+ * 这里保留的 0.5 只是兜底，真正起作用的是 fallbackUsed 与 infoSufficiency 两个语义条件。
  *
  * 阈值口径：统一取契约常量 LOW_CONFIDENCE_THRESHOLD（0.5），
  * 界面不再持有独立阈值，避免与契约、评测脚本三处口径分裂。
@@ -574,6 +722,11 @@ function buildLowConfidenceHeadline(input: {
   return "模型判定不可完全采纳，建议人工归类。";
 }
 
+/**
+ * 琥珀横幅。醒目样式（2px 琥珀边 + 满底琥珀）是硬性要求：
+ * 它表达的是「本次判定不可直接采纳」，必须比结果卡片更先被看到。
+ * 触发条件见 evaluateManualReview，主文案与原因句分别由下面两个 build* 函数生成。
+ */
 function LowConfidenceBanner({
   topOneConfidence,
   infoSufficiency,
@@ -624,6 +777,21 @@ function LowConfidenceBanner({
 
 // ---- a) Top-3 模块 ----
 
+/**
+ * 模块候选 Top-3。
+ *
+ * 为什么三条都列出来而不是只给 Top-1：只给一条会让用户以为模型只产出一个答案，
+ * 无从判断是"险胜"还是"压倒性"；三条并列把候选间的相对差距摊开，交给人工判断。
+ *
+ * 为什么只有 Top-1 用深色条：视觉上强调首选，但不隐藏另两条的数值——
+ * 「强调」不能被读成「只有它有可能」。
+ *
+ * 为什么同时显示中文标签与英文 key：日志、评测脚本、契约里用的都是英文 key，
+ * 界面保留英文，用户才能把界面与后端日志直接对照。
+ *
+ * 进度条的 role="meter" 与 aria-label 必须保留：它是数值而不是装饰，
+ * 读屏用户要拿到与视觉一致的数值，后加的口径说明不得以任何理由替换掉这些属性。
+ */
 function TopicSection({
   candidates,
 }: {
@@ -693,6 +861,16 @@ function TopicSection({
 
 // ---- b) 严重度 ----
 
+/**
+ * 严重度。
+ *
+ * 为什么必须带准确率标注：见 SEVERITY_ACCURACY_NOTE——当前 44.29%，低于朴素基线 56.43%，
+ * 只能当参考值。徽章越醒目，这行标注越不能省，否则醒目程度会被误读成确定程度。
+ *
+ * 为什么要展示 signals（命中的关键词）：严重度是模型从描述里读出来的，
+ * 摊开命中信号后用户能立刻判断「它是因为看到 crash 这个词才判崩溃的」，
+ * 从而决定信不信。这是目前唯一能让人复核严重度的线索。
+ */
 function SeveritySection({ severity }: { severity: TriageResult["severity"] }) {
   return (
     <div className="px-4 py-4 sm:px-5">
@@ -730,6 +908,16 @@ function SeveritySection({ severity }: { severity: TriageResult["severity"] }) {
 
 // ---- c) 相似历史 Issue（duplicates）----
 
+/**
+ * 相似历史 Issue。
+ *
+ * 这批记录有双重身份：既是查重候选，也是注入模型、影响模块判定的材料——
+ * 检索层同一批 match_issues 结果分别 slice 成 references 与 duplicates。
+ * 原「AI 参考了什么」区块因此删除，可解释性说明并入本区块，详见 ResultCard 处的注释。
+ *
+ * 相似度用百分比（formatPercent）、阈值与置信度用两位小数（formatScore）：
+ * 前者表达给用户的强弱感受，后者要能与契约常量、评测脚本、日志直接对照。
+ */
 function DuplicatesSection({
   duplicates,
 }: {
@@ -747,100 +935,57 @@ function DuplicatesSection({
           </span>
         </p>
       ) : (
-        <ul className="mt-2 space-y-2">
-          {duplicates.map((duplicate) => (
-            <li
-              key={duplicate.issueNumber}
-              className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:gap-3"
-            >
-              <a
-                href={duplicate.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-mono text-xs font-semibold text-indigo-700 underline decoration-dotted hover:text-indigo-900"
+        <>
+          {/*
+            原「AI 参考了什么」区块的可解释性说明，合并到此处。
+            因为 references.issues 就是 duplicates 的前 3 条（见检索层 slice 口径），
+            与其另起一块重复同一批记录，不如在此说明这批记录的双重身份：
+            既是查重候选，也是注入模型、影响模块判定的材料。
+          */}
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            以下是为本条缺陷检索到的相似历史 Issue，也是模型判定模块归属时读入的参照材料。
+            <span className="mt-0.5 block">点击编号可查看原始 Issue。</span>
+          </p>
+
+          <ul className="mt-2 space-y-2">
+            {duplicates.map((duplicate) => (
+              <li
+                key={duplicate.issueNumber}
+                className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:gap-3"
               >
-                #{duplicate.issueNumber}
-              </a>
-              <span className="min-w-0 flex-1 text-sm break-words text-slate-800">
-                {duplicate.title}
-              </span>
-              <span className="font-mono text-xs text-slate-500 tabular-nums">
-                {formatPercent(duplicate.similarity)}
-              </span>
-            </li>
-          ))}
-        </ul>
+                <a
+                  href={duplicate.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-xs font-semibold text-indigo-700 underline decoration-dotted hover:text-indigo-900"
+                >
+                  #{duplicate.issueNumber}
+                </a>
+                <span className="min-w-0 flex-1 text-sm break-words text-slate-800">
+                  {duplicate.title}
+                </span>
+                <span className="font-mono text-xs text-slate-500 tabular-nums">
+                  {formatPercent(duplicate.similarity)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );
 }
 
-// ---- d) AI 参考了什么（references）----
-
-function ReferencesSection({
-  references,
-}: {
-  references: NonNullable<TriageResult["references"]>;
-}) {
-  return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
-        <h2 className="text-sm font-semibold text-slate-800">
-          AI 本次判断时参考了以下历史 Issue
-        </h2>
-        <p className="mt-1 text-xs text-slate-500">
-          下面是模型本次判定前检索到并读入的历史 Issue，也就是它做判断时实际看到过的材料；
-          点开核对，看依据是否对得上。
-        </p>
-      </div>
-
-      <div className="divide-y divide-slate-200">
-        {references.issues.length > 0 && (
-          <div className="px-4 py-4 sm:px-5">
-            <h3 className="text-xs font-semibold tracking-wide text-slate-500">
-              参考的历史 Issue
-            </h3>
-            <ul className="mt-2 space-y-2">
-              {references.issues.map((issue) => (
-                <li
-                  key={issue.number}
-                  className="flex flex-col gap-1 rounded-lg bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:gap-3"
-                >
-                  <span className="font-mono text-xs font-semibold text-slate-600">
-                    #{issue.number}
-                  </span>
-                  <span className="min-w-0 flex-1 text-sm break-words text-slate-800">
-                    {issue.title || "（无标题）"}
-                  </span>
-                  {issue.similarity !== undefined && (
-                    <span className="font-mono text-xs text-slate-500 tabular-nums">
-                      {formatPercent(issue.similarity)}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/*
-          「参考的官方规则」小块已停止渲染。
-
-          原因：规则为标签定义文本，与 Bug 描述语义空间不同，相似度区分度低；
-          展示会削弱可信度。v2.1 改为按模型候选类别名匹配规则、
-          并通过 rules-by-topic 批次评测后，再恢复本小块展示。
-
-          仅前端不渲染，后端一律不动：references.rules 照常返回（契约字段保留），
-          注入模型的规则内容保持不变——改注入内容属新的优化手段，
-          须作为 v2.1 单独版本重评，不在本次界面取舍里夹带。
-        */}
-      </div>
-    </section>
-  );
-}
-
 // ---- 请求元信息（可追溯性）----
 
+/**
+ * 请求元信息。
+ *
+ * 为什么把 requestId / 耗时 / token / 重试次数直接摊在页面上：
+ * 分诊结果本身不可复现（模型输出有随机性），用户反馈「这条判错了」时，
+ * 只有 requestId 能把界面上的一次展示与后端日志里的一次调用对上。
+ * 没有这行信息，任何一条问题反馈都无法定位。
+ */
 function MetaFooter({ result }: { result: TriageResult }) {
   const { meta } = result;
   const items: [string, string][] = [
@@ -870,6 +1015,10 @@ function MetaFooter({ result }: { result: TriageResult }) {
 // 工具函数
 // ============================================================
 
+/**
+ * 百分比只用于「给用户看的强弱」（模块置信度、相似度），不用于阈值。
+ * 两类数字刻意分开排版：阈值要能与契约常量和评测脚本逐字对照，见 formatScore。
+ */
 function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
