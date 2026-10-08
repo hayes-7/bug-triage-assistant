@@ -1,7 +1,8 @@
 /**
  * 评测批次历史（静态数据模块）
  *
- * ⚠ 本文件由脚本从 data/eval_metrics_*.json 逐字段抄出，请勿手工编辑。
+ * ⚠ 本文件由 scripts/build_eval_history.py 从 data/eval_metrics_*.json
+ *   逐字段抄出，请勿手工编辑。
  * 任何数字都不得手改或美化：报告页的可信度完全依赖「页面数字 == JSON 数字」。
  * 新增批次时重新生成本文件，不要在此处追加手写条目。
  *
@@ -11,7 +12,10 @@
  *   2. 评测结果是冻结的历史事实，不是运行期状态，没有动态读取的必要；
  *   3. 固定为源码后，数字进入 git 历史，可追溯每次报告页改动对应的数据版本。
  *
- * 生成时间：2026-09-23T02:47:20.425Z
+ * 本文件刻意不含生成时间戳：时间戳会让每次生成都产生 diff，淹没真正的数字
+ * 变化，并使 --check 模式永远报差异、「确认数据无变化」这个语义失效。
+ * 生成日期改由 git 提交历史提供。
+ *
  * 源文件：data/eval_metrics_baseline-20260920.json、data/eval_metrics_sev-defined.json、data/eval_metrics_sev-procedural.json、data/eval_metrics_sev-fewshot.json、data/eval_metrics_qwen3max-v13.json、data/eval_metrics_with-rag.json
  */
 
