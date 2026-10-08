@@ -30,6 +30,17 @@ import {
 /** 严重度准确率标注（硬性要求，不得省略） */
 const SEVERITY_ACCURACY_NOTE = "参考值 · 实测准确率约 44%";
 
+/**
+ * 模块候选百分比口径标注（硬性要求，不得省略）。
+ *
+ * 实测（D21，1 位真实用户）：用户把 95% 理解为「这条判断有 95% 概率是对的」，
+ * 实际那是模型自报置信度（中位 98%，而真实 Top-1 准确率仅 73%，
+ * 280 条中无一条低于 0.75），是失真的信号，不能当可靠性依据用。
+ * 因此必须在看得到数字的位置说明它只表示候选之间的相对强弱。
+ */
+const TOPIC_CONFIDENCE_NOTE =
+  "百分比表示候选之间的相对强弱，不代表这条判断正确的概率";
+
 const TOPIC_LABELS: Record<TopicCategory, string> = {
   editor: "编辑器",
   rendering: "渲染",
@@ -235,9 +246,12 @@ function SamplePicker({
 }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="text-sm font-medium text-slate-800">示例缺陷（点击填入）</h2>
+      <h2 className="text-sm font-medium text-slate-800">
+        示例缺陷（点击填入）—— 先看效果，换成你自己的 bug 试试
+      </h2>
       <p className="mt-1 text-xs text-slate-500">
-        取自评测集真实记录，覆盖不同模块；末条为信息不足样本，用于查看低置信提示。
+        示例只是演示：取自评测集真实记录，覆盖不同模块。看完效果后，把标题和正文换成你自己的缺陷再点「开始分诊」。
+        末条为信息不足样本，用于查看低置信提示。
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {SAMPLE_ISSUES.map((sample) => (
@@ -389,6 +403,8 @@ function ResultCard({ result }: { result: TriageResult }) {
       {review.showBanner && (
         <LowConfidenceBanner
           topOneConfidence={top1?.confidence}
+          infoSufficiency={result.infoSufficiency}
+          fallbackUsed={result.meta.fallbackUsed}
           reasons={review.reasons}
         />
       )}
@@ -493,15 +509,56 @@ function evaluateManualReview(result: TriageResult): {
 
 // ---- 低置信提示（醒目样式，硬性要求）----
 
+/**
+ * 按真实触发来源生成一句通俗原因。
+ *
+ * 实测（D21）：用户看到「建议人工确认」后自行脑补成「检索库较小」，
+ * 因此原因必须写明触发点本身，且不提检索库规模：
+ * 本提示与参考材料的多少无关，只与这条描述的信息量、模型是否返回结果、自评置信度有关。
+ */
+function buildLowConfidenceCause(input: {
+  fallbackUsed: boolean;
+  infoSufficiency: TriageResult["infoSufficiency"];
+  topOneConfidence?: number;
+}): string | null {
+  const causes: string[] = [];
+
+  if (input.fallbackUsed) {
+    causes.push("模型未返回有效结果");
+  }
+
+  if (input.infoSufficiency === "insufficient") {
+    causes.push("这条描述的信息不足，无法可靠判断（与参考材料多少无关）");
+  }
+
+  if (
+    input.topOneConfidence !== undefined &&
+    input.topOneConfidence < LOW_CONFIDENCE_THRESHOLD
+  ) {
+    causes.push("模型自评置信度低于阈值");
+  }
+
+  return causes.length > 0 ? `原因：${causes.join("；")}。` : null;
+}
+
 function LowConfidenceBanner({
   topOneConfidence,
+  infoSufficiency,
+  fallbackUsed,
   reasons,
 }: {
   topOneConfidence?: number;
+  infoSufficiency: TriageResult["infoSufficiency"];
+  fallbackUsed: boolean;
   reasons: string[];
 }) {
   const actual =
     topOneConfidence === undefined ? "无模块候选" : formatScore(topOneConfidence);
+  const cause = buildLowConfidenceCause({
+    fallbackUsed,
+    infoSufficiency,
+    topOneConfidence,
+  });
 
   return (
     <section
@@ -518,6 +575,11 @@ function LowConfidenceBanner({
             该缺陷描述信息不足或置信度低于阈值（实际 {actual}，阈值{" "}
             {formatScore(LOW_CONFIDENCE_THRESHOLD)}），模型判定不可完全采纳，建议人工归类。
           </p>
+          {cause !== null && (
+            <p className="mt-1 text-sm leading-6 font-medium text-amber-900">
+              {cause}
+            </p>
+          )}
           {reasons.length > 0 && (
             <ul className="mt-2 space-y-0.5 text-xs leading-5 text-amber-900">
               {reasons.map((reason) => (
@@ -541,6 +603,11 @@ function TopicSection({
   return (
     <div className="px-4 py-4 sm:px-5">
       <h3 className="text-sm font-semibold text-slate-800">模块候选 Top-3</h3>
+
+      {/* 与严重度处的 SEVERITY_ACCURACY_NOTE 同一套样式，紧邻百分比数值 */}
+      <p className="mt-1 text-xs leading-5 font-medium text-amber-700">
+        {TOPIC_CONFIDENCE_NOTE}
+      </p>
 
       {candidates.length === 0 ? (
         <p className="mt-2 text-sm text-slate-500">
@@ -689,9 +756,12 @@ function ReferencesSection({
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
-        <h2 className="text-sm font-semibold text-slate-800">AI 参考了什么</h2>
+        <h2 className="text-sm font-semibold text-slate-800">
+          AI 本次判断时参考了以下历史 Issue
+        </h2>
         <p className="mt-1 text-xs text-slate-500">
-          本次判定前检索到并注入提示词的材料，供核对模型依据。
+          下面是模型本次判定前检索到并读入的历史 Issue，也就是它做判断时实际看到过的材料；
+          点开核对，看依据是否对得上。
         </p>
       </div>
 
