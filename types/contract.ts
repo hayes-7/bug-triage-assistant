@@ -94,7 +94,8 @@ export type DuplicateCandidate = {
 };
 
 /**
- * 检索到的相似历史 Issue（v2.0 参考材料，用于界面「AI 参考了什么」）
+ * 检索到的相似历史 Issue（v2.0 参考材料；契约字段保留并照常返回，
+ * 界面不再单独渲染——与 duplicates 同源，说明已并入「相似历史 Issue」）
  *
  * 防泄漏（硬性）：仅透出 number / title / similarity。
  * 绝不包含 gt_topics / gt_severity / body / html_url——
@@ -121,7 +122,8 @@ export type ReferenceRule = {
 };
 
 /**
- * v2.0 检索到的参考材料，供界面展示「AI 参考了什么」。
+ * v2.0 检索到的参考材料。契约字段保留并照常返回，界面不再单独渲染
+ *（与 duplicates 同源，并列展示会重复，可解释性说明已并入「相似历史 Issue」）。
  * 检索降级（embedding / RPC 失败、超时、配置缺失）时两个数组均为空数组，
  * 不返回 null——调用方只需判断 length，无需区分 null 与空。
  */
@@ -362,7 +364,8 @@ export const TIMEOUTS = {
    *
    * 3_000 → 5_000（实测调整）：3 秒下约 1/3 请求在 rpc 阶段超时降级
    *（日志 reason: '检索超过 3000 毫秒'，elapsedMs 普遍 3006–3016，即卡在阈值上），
-   * references 随之变成空数组、界面「AI 参考了什么」时有时无。
+   * references 随之变成空数组（当时界面尚有独立的参考材料区块，
+   * 表现即该区块时有时无；该区块现已合并入「相似历史 Issue」）。
    * 端到端预算 45 秒、模型调用本身约 5–7 秒，检索多给 2 秒不构成风险。
    * 注意：本值只影响降级概率，不改变检索逻辑与注入内容，故不触发 Prompt 版本升级。
    */
