@@ -54,11 +54,19 @@ __pycache__/
 !/data/eval_dup_results_*
 !/data/eval_set_*
 
+# 断点续传进度文件：每次运行重写，无归档价值，且会让每次评测都产生无意义 diff
+# 必须放在上面的白名单之后——gitignore 以后匹配者优先
+/data/*.progress.json
+
 # dev server 启动日志（每次启动重新生成，无归档价值）
 .dev-server.log
 
 # 本地验证临时产物（PD-10 界面自检期间生成，不得进入仓库）
-# 注意：*.log 只匹配扩展名为 .log 的文件，不影响 data/ 下评测产物
+# 注意：本规则同时命中 data/eval_console_*.log（评测控制台输出）。
+# 这是有意为之——控制台日志属过程产物，不归档；
+# 其中被引用的证据（如检索超时的 reason / elapsedMs）已摘录进
+# docs/decisions.md 与 types/contract.ts 的 TIMEOUTS 注释，不依赖原日志。
+# 评测指标本体不受影响：
 # （eval_metrics_*.json / eval_results_*.csv / eval_dup_results_*.csv / eval_set_*.csv 仍可提交）
 *.log
 .tmp-verify/

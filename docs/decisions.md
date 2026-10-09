@@ -21,6 +21,13 @@
 - `vector` 扩展已启用；issues 3 个索引、triage_rules 2 个索引；
   `match_issues` / `match_rules` 已创建，`match_issues` 内 `in_eval_set = false` 为强制过滤。
 
+## 2026-09-18 · triage_rules 规则库过滤
+
+- `data/triage_rules.csv` 由 78 条过滤至 54 条：删除项目管理流程类（milestone / assignee / projects /
+  linked PR / claim / close reason）与贡献者协作状态类（Archived / Cherrypick / Documentation /
+  Feature proposal / For PR meeting / Good first issue / Salvageable / Spam / Tracker）。
+- 目的：该库用于 RAG 检索注入提示词，与模块、严重度判定无关的条文会稀释有效信息。
+
 ## 2026-09-18 · normalized_text 与 net_text_len 不一致（已知问题，决定保持现状）
 
 - 现象：4200 行中 4196 行 `len(normalize_text(body)) != net_text_len`。
@@ -52,8 +59,8 @@
 - 处理方式（第一步最小改动）：给 `generateObject` 显式加 `mode: "json"`。
   实测**无效**——项目用的 `ai` 为 v7.0.97，该版本已移除 `mode` 参数，传入后被忽略，
   仍发送 `json_schema`，DeepSeek 依旧返回 400 原文（服务端外复现脚本两次响应一致）。
-  该行暂保留并注明实测结论，待定夺后决定是否删除；**最终已删除**（保留无效参数会误导后续读者），
-  `lib/triage/model.ts` 回到改前状态。
+  **结论：该行已删除**（保留无效参数会误导后续读者），
+  `lib/triage/model.ts` 回到改前状态。（此前一度"暂保留待定夺"，定夺结果即删除。）
 - 未做：未改 Zod Schema、未改 `prompts/triage_v1_0.ts`、未改重试分类逻辑。
 - 可行性探测结果（严格复刻 `model.ts` 调用参数，服务端外执行，同一样本）：
   - 探测 1（关闭 structured outputs）：**失败**。`@ai-sdk/openai` 4.0.65 的
@@ -101,6 +108,9 @@
 - 该对比回答的是更有产品价值的问题：为更强的模型多付费，能否换来足够的准确率提升。
 - 执行时点：第 2 周；切换方式：只改 `PRIMARY_MODEL_ID` 一个环境变量，`meta.modelId`
   即为分组依据，无需改代码。
+- **后续（2026-09-22 已执行，本条为当时的计划，保留原样以免改写历史）**：对比最终以
+  `qwen3-max` 完成——原计划的 `qwen-max` 本账号不支持 `json_schema`（见
+  `prompts/CHANGELOG.md` 的 `qwen3max-v13` 行），故换成 `qwen3-max`；结果不在此重复记录。
 
 ## 2026-09-20 · 向量生成（PD-06 第 8 节）
 
@@ -151,14 +161,40 @@
 - **本次改动范围**：`model.ts` / `route.ts` / `truncate.ts` 三处 import 改址为 `@/prompts`（仅改地址，
   导出符号与取值不变，`INPUT_TRUNCATE_TOKENS` 在两版均为 1500，行为无变化）。
   `prompts/triage_v1_0.ts` 保留不动——历史版本须可复现 `baseline` 批次；
-  `index.ts` 当前指向 v1.1。
+  `index.ts` 当前指向 **v2.0**（仓库现有 v1.0–v2.0 共 5 个版本，本行写作时的 v1.1 已过时）。
 - **未做**：未给 `index.ts` 加运行时校验（如断言 `PROMPT_VERSION` 与文件名一致）。
-  当前只有两个版本、切换频率低，暂以「冒烟核对 `meta.promptVersion`」代替；
-  版本数增加后再考虑。
+  本行写作时只有两个版本、切换频率低，暂以「冒烟核对 `meta.promptVersion`」代替。
+  ⚠ 该前提已不成立（现 5 个版本），如需补运行时校验请在此登记结论。
 
-## 2026-09-18 · triage_rules 规则库过滤
+## 2026-09-22 · 检索增强（v2.0）接入与检索超时阈值调整
 
-- `data/triage_rules.csv` 由 78 条过滤至 54 条：删除项目管理流程类（milestone / assignee / projects /
-  linked PR / claim / close reason）与贡献者协作状态类（Archived / Cherrypick / Documentation /
-  Feature proposal / For PR meeting / Good first issue / Salvageable / Spam / Tracker）。
-- 目的：该库用于 RAG 检索注入提示词，与模块、严重度判定无关的条文会稀释有效信息。
+- 实现层细节（`lib/supabase.ts` / `lib/retrieval.ts`、RPC 与索引、注入内容）记录在
+  `prompts/CHANGELOG.md` 的 v2.0 条目，按「同一决策只在一处记录」的原则此处不重复。
+- 阈值决策：`TIMEOUTS.retrieval` 3_000 → 5_000，实测依据记录在 `types/contract.ts` 的
+  `TIMEOUTS` 注释（3 秒下约 1/3 请求在 rpc 阶段超时降级，elapsedMs 普遍 3006–3016），
+  此处同样不重复。
+
+## 2026-10-08 · 界面不再渲染 references（合并重复区块）
+
+- 现象：结果页并列展示「相似历史 Issue」与「AI 参考了什么」两个区块，条目与相似度完全一致
+  （实测 #100014 77% / #99414 71% / #83236 71%），用户第一反应是「这两项是否重复推送」，
+  反而损害可信度。
+- 根因：`lib/retrieval.ts` 一次 `match_issues` 的结果同时喂给 `references.issues`（slice 0-3）
+  与 `duplicates`（slice 0-5），两者同源，内容必然重复。
+- 决策：删除 `ReferencesSection`，可解释性说明并入 `DuplicatesSection`。
+  `types/contract.ts` 的 `references` 字段、`app/api/triage/route.ts` 的返回、
+  检索层的 slice 口径**一律不动**，仅前端不再渲染——改动面最小、契约不变。
+- 勿重复排查：`references` 与 `duplicates` 同源是检索层的既定口径，不是 bug。
+
+## 2026-10-08 · D21 真实用户实测（1 位）与三处界面改动
+
+- 实测三处误解——这是本项目界面文案的改动依据，别处查不到：
+  1. 把 95% 理解为「这条判断有 95% 概率是对的」。实际那是模型自报置信度：中位 98%，
+     而真实 Top-1 准确率仅 73%，280 条中无一条低于 0.75。
+  2. 点完示例按钮后认为「这个网页的目的已经完成了」，没意识到下一步应输入自己的 bug。
+  3. 看到「建议人工确认」后自行归因于「检索库较小」；实际触发条件是描述信息不足。
+- 对应改动：模块候选百分比加口径说明；示例区补引导；低置信提示补通俗原因，
+  且不暴露字段名、不提检索库规模。位置与原文见 `app/page.tsx` 注释。
+- 关联：低置信提示以 `fallbackUsed` / `infoSufficiency` 语义触发为主、置信度阈值仅兜底
+  （280 条置信度最低 0.75，任何低于 0.75 的数值阈值都是死阈值），
+  理由见 `app/page.tsx` 的 `evaluateManualReview` 注释。
